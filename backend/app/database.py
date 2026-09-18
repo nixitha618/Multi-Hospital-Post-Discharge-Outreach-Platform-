@@ -5,14 +5,27 @@ from sqlalchemy import event
 from backend.app.config import settings
 from backend.app.models.base import Base
 
+def get_db_url() -> str:
+    url = settings.DATABASE_URL
+    # Render and Heroku provide "postgres://" or "postgresql://" which default to psycopg2
+    # Async SQLAlchemy requires "postgresql+asyncpg://"
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql://") and not url.startswith("postgresql+"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+db_url = get_db_url()
+is_sqlite = "sqlite" in db_url
+
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    db_url,
     echo=False,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+    connect_args={"check_same_thread": False} if is_sqlite else {}
 )
 
 # Enable WAL mode for SQLite to handle concurrent workers cleanly
-if "sqlite" in settings.DATABASE_URL:
+if is_sqlite:
     @event.listens_for(engine.sync_engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
