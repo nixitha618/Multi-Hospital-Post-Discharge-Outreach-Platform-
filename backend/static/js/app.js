@@ -1,4 +1,4 @@
-// AegisHealth Post-Discharge Operations Platform - Main Application Logic
+// Multi-Hospital Post-Discharge Outreach Platform - Main Application Logic
 
 let currentTenant = 'hosp-mgh';
 let currentRole = 'CAMPAIGN_MANAGER';

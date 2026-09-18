@@ -2,7 +2,7 @@
 
 ## 1. System Overview
 
-The **AegisHealth Outreach Operations Platform** is a multi-tenant, queue-driven, observable AI healthcare system. It automates and coordinates post-discharge patient follow-up, clinical triage, consensus-based safety escalation, and EHR documentation across multiple hospital tenants.
+The **Multi-Hospital Post-Discharge Outreach Platform** is a multi-tenant, queue-driven, observable AI healthcare system. It automates and coordinates post-discharge patient follow-up, clinical triage, consensus-based safety escalation, and EHR documentation across multiple hospital tenants.
 
 ```mermaid
 graph TD

@@ -8,7 +8,7 @@ async def test_frontend_serving():
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         res = await ac.get("/")
         assert res.status_code == 200
-        assert "AegisHealth Operations Platform" in res.text
+        assert "Multi-Hospital Post-Discharge Outreach Platform" in res.text
         assert "html" in res.headers.get("content-type", "")
 
         # Check static css

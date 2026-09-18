@@ -566,7 +566,7 @@ async def seed_database(db: AsyncSession):
                 id=f"turn-{call_id}-1",
                 call_id=call_id,
                 speaker="AGENT",
-                text=f"Hello, this is AegisHealth calling on behalf of {hosp.name}. Am I speaking with {pat.first_name}?",
+                text=f"Hello, this is the AEGIS outreach team calling on behalf of {hosp.name}. Am I speaking with {pat.first_name}?",
                 turn_index=1,
                 intent="greeting_identity_verification"
             ))
@@ -647,7 +647,7 @@ async def seed_database(db: AsyncSession):
                 id=f"note-{uuid.uuid4().hex[:8]}",
                 escalation_id=esc.id,
                 author_id="usr-system-ai",
-                author_name="AegisHealth Safety Monitor",
+                author_name="AEGIS Safety Monitor",
                 note_text="Automated clinical escalation initiated from outbound conversational triage."
             ))
 

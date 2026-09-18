@@ -1,4 +1,4 @@
-# AegisHealth: Multi-Hospital Post-Discharge Outreach Platform
+# Multi-Hospital Post-Discharge Outreach Platform
 
 > **Autonomous AI-Powered Patient Follow-Up, Clinical Triage & Hospital Outreach Operations Platform**  
 > *Product Requirements Document — Version 2.0 Reference Implementation*
