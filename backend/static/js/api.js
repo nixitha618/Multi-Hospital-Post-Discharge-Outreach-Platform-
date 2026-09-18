@@ -254,6 +254,19 @@ class ApiClient {
     if (!res.ok) return [];
     return res.json();
   }
+
+  async sendChatMessage(payload) {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `Chat request failed (HTTP ${res.status})`);
+    }
+    return res.json();
+  }
 }
 
 const api = new ApiClient();

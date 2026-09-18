@@ -18,10 +18,10 @@ class ClinicalTriageAgent:
         {"pattern": r"\b(calf\b.*?\b(swollen|red|hot|pain|tender|hurts)|calf pain|swollen calf|calf redness|warmth in (my )?leg)\b", "key": "calf_pain_dvt", "severity": "CRITICAL", "citation": "AAOS DVT Guideline Rule 1"},
         {"pattern": r"\b(fever (over|above|of) 10[1-9]|high fever|chills and fever|10[1-9]\.[0-9])\b", "key": "fever", "severity": "CRITICAL", "citation": "Infection Protocol 3.2"},
         {"pattern": r"\b(pus|drainage leaking|incision open|wound red and hot)\b", "key": "wound_infection", "severity": "CRITICAL", "citation": "CDC Surgical Site Guideline"},
-        {"pattern": r"\b(gained [3-9] (pounds|lbs)|weight up [3-9] lbs)\b", "key": "weight_gain", "severity": "URGENT", "citation": "AHA/ACC HF Protocol 4.2"},
+        {"pattern": r"\b(gained [3-9] (pounds|lbs)|weight up [3-9] lbs|increased by [3-9] (pounds|lbs)|weight increased by [3-9] (pounds|lbs))\b", "key": "weight_gain", "severity": "URGENT", "citation": "AHA/ACC HF Protocol 4.2"},
         {"pattern": r"\b(dizzy|lightheaded|almost fainted|passed out)\b", "key": "dizziness", "severity": "CONCERNING", "citation": "Hemodynamic Protocol 5.1"},
-        {"pattern": r"\b(swelling in (my )?(feet|ankles|legs)|shoes (are )?(too )?tight|feet (are )?swollen|legs (are )?swollen|ankles (are )?swollen|swollen feet|swollen ankles|swollen legs|severely swollen)\b", "key": "edema", "severity": "CONCERNING", "citation": "AHA/ACC HF Protocol 4.4"},
-        {"pattern": r"\b(stopped taking|not taking|haven'?t taken|can'?t afford|ran out of|skipped|refusing)\s+(my\s+)?(meds|medications?|pills?|water pills?|blood thinner|prescriptions?)\b", "key": "medication_non_adherence", "severity": "CONCERNING", "citation": "Pharmacotherapy Safety Protocol 6.1"}
+        {"pattern": r"\b(swelling in (my )?(feet|ankles|legs)|shoes (are )?(too )?tight|feet (are )?swollen|legs (are )?(very )?swollen|ankles (are )?(very )?swollen|swollen feet|swollen ankles|swollen legs|severely swollen|very swollen)\b", "key": "edema", "severity": "CONCERNING", "citation": "AHA/ACC HF Protocol 4.4"},
+        {"pattern": r"\b(stopped taking|stopped|not taking|haven'?t taken|can'?t afford|ran out of|skipped|refusing)\s+(my\s+)?(meds|medications?|pills?|water pills?|blood thinner|prescriptions?)\b", "key": "medication_non_adherence", "severity": "CONCERNING", "citation": "Pharmacotherapy Safety Protocol 6.1"}
     ]
 
     @staticmethod

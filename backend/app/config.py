@@ -1,8 +1,10 @@
 import os
+from pathlib import Path
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-load_dotenv()
+_env_file = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(dotenv_path=_env_file, override=True)
 
 class Settings(BaseModel):
     APP_NAME: str = "Multi-Hospital Outreach Platform"
@@ -23,7 +25,9 @@ class Settings(BaseModel):
     WEIGHT_STARVATION: float = 0.10
     
     # LLM Settings
-    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "deterministic") # "deterministic" or "gemini" or "openai"
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "groq") # "groq" or "deterministic" or "gemini" or "openai"
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "groq/compound-mini")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 

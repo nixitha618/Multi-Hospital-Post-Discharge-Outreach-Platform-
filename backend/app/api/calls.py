@@ -18,6 +18,7 @@ from backend.app.models.audit import AuditLog
 from backend.app.models.enums import CallOutcome, TaskStatus, UrgencyLevel, EscalationStatus
 from backend.app.schemas.call import CallRecordResponse, CallTurnResponse, CallInitiateRequest, InteractiveTurnRequest
 from backend.app.ai.intake_agent import voice_intake_agent
+from backend.app.ai.groq_service import groq_service
 from backend.app.ai.triage_agent import clinical_triage_agent
 from backend.app.ai.consensus_engine import consensus_engine
 from backend.app.ai.documentation_agent import documentation_agent
@@ -383,6 +384,20 @@ async def finish_call(
     await db.commit()
     await db.refresh(call)
 
+    # Run LLM Dialogue Quality Evaluation
+    dialogue_eval = groq_service.evaluate_dialogue_with_llm(
+        transcript=full_transcript,
+        patient_context={
+            "patient_name": f"{pat.first_name} {pat.last_name}",
+            "condition": camp.target_condition,
+            "attempt": call.attempt_number
+        },
+        triage_summary={
+            "classification": call.triage_classification.value,
+            "consensus": call.consensus_decision
+        }
+    )
+
     return {
         "call_id": call.id,
         "outcome": call.outcome.value,
@@ -391,7 +406,8 @@ async def finish_call(
         "consensus": call.consensus_decision,
         "escalation_created": call.escalation_created,
         "ehr_sync_status": call.ehr_sync_status,
-        "documentation_summary": call.documentation_summary
+        "documentation_summary": call.documentation_summary,
+        "dialogue_evaluation": dialogue_eval.model_dump()
     }
 
 @router.post("/task/{task_id}/finish")

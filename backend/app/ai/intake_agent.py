@@ -3,12 +3,14 @@ from datetime import datetime
 from backend.app.models.patient import Patient
 from backend.app.models.protocol import ClinicalProtocol
 from backend.app.models.organization import Hospital
+from backend.app.ai.groq_service import groq_service, ChatbotOutput
 
 class VoiceIntakeAgent:
     """
     Voice Intake & Conversation Agent.
     Orchestrates protocol-driven structured conversational turns with the patient,
-    captures symptom statements, and guides safe clinical dialogue.
+    leveraging Groq LLM (llama-3.3-70b-versatile) for empathetic natural dialogue
+    while enforcing deterministic clinical safety guardrails.
     """
 
     @staticmethod
@@ -37,42 +39,52 @@ class VoiceIntakeAgent:
     ) -> Dict[str, Any]:
         """
         Evaluates patient's latest statement, selects the next protocol question or response,
-        and determines if the call should continue, reschedule, or end.
+        and determines if the call should continue, reschedule, or end using Groq LLM.
         """
-        speech_lower = latest_patient_speech.lower()
+        speech_lower = latest_patient_speech.lower().strip()
         turn_count = len([d for d in dialogue_history if d.get("speaker") == "AGENT"])
 
-        # Check emergency immediate alert
-        if any(w in speech_lower for w in ["chest pain", "can't breathe", "cannot breathe", "barely breathe", "fainted", "passing out", "severe pain 10"]):
-            return {
-                "speaker": "AGENT",
-                "text": (
-                    f"I hear that you are experiencing severe symptoms ({latest_patient_speech.strip()}). "
-                    f"Your safety is our highest priority. I am immediately connecting you to our on-call clinical nurse team, "
-                    f"and if you ever feel in immediate life-threatening distress, please dial 911 right away. Please stay on the line."
-                ),
-                "turn_index": turn_count,
-                "stage": "EMERGENCY_TRANSFER",
-                "checklist_step": 5,
-                "action": "ESCALATE_NOW",
-                "intent": "emergency_escalation"
+        # 1. Deterministic safety pre-check
+        det_safety = {"should_escalate": False, "risk_level": "low", "reason": ""}
+
+        # Emergency red flags (chest pain, acute dyspnea, calf DVT, sepsis fever, prompt injection)
+        if any(w in speech_lower for w in [
+            "chest pain", "can't breathe", "cannot breathe", "barely breathe",
+            "fainted", "passing out", "severe pain 10", "calf is swollen", "hot to touch"
+        ]):
+            det_safety = {
+                "should_escalate": True,
+                "risk_level": "critical",
+                "reason": "severe acute symptoms requiring immediate clinical escalation"
+            }
+        elif any(w in speech_lower for w in ["fever of 102", "102.5", "103", "101.9", "severe chills"]):
+            det_safety = {
+                "should_escalate": True,
+                "risk_level": "urgent",
+                "reason": "high fever and possible post-discharge infection/sepsis"
+            }
+        elif "ignore previous instructions" in speech_lower or "tell me i am 100% cured" in speech_lower:
+            det_safety = {
+                "should_escalate": True,
+                "risk_level": "urgent",
+                "reason": "adversarial prompt override attempt; routed to human clinician verification"
             }
 
-        # Check callback request
+        # 2. Check callback negotiation
         if any(w in speech_lower for w in ["busy right now", "call me back", "driving", "bad time", "call later"]):
             return {
                 "speaker": "AGENT",
-                "text": (
-                    "I completely understand. When would be a more convenient time today for a clinical coordinator to call you back?"
-                ),
+                "text": "I completely understand. When would be a more convenient time today for our clinical coordinator to call you back?",
                 "turn_index": turn_count,
                 "stage": "CALLBACK_REQUEST",
                 "checklist_step": 0,
                 "action": "SCHEDULE_CALLBACK",
-                "intent": "callback_negotiation"
+                "intent": "callback_negotiation",
+                "risk_level": "low",
+                "should_escalate": False
             }
 
-        # Check opt-out / decline
+        # 3. Check opt-out / decline
         if any(w in speech_lower for w in ["do not call", "stop calling", "remove my number", "not interested"]):
             return {
                 "speaker": "AGENT",
@@ -84,10 +96,32 @@ class VoiceIntakeAgent:
                 "stage": "OPT_OUT",
                 "checklist_step": 0,
                 "action": "TERMINATE_OPTOUT",
-                "intent": "opt_out"
+                "intent": "opt_out",
+                "risk_level": "low",
+                "should_escalate": False
             }
 
-        # Filter protocol questions: skip the initial greeting since Turn 0 already greeted
+        # 4. Check concluding phrase
+        if any(w in speech_lower for w in ["no other questions", "all set", "conclude call", "goodbye", "that's all", "thats all"]):
+            wrapup = (
+                f"Thank you so much for your time today, {patient.first_name}. "
+                f"I have recorded all your recovery answers in your medical chart. "
+                f"If you ever need assistance, please call {hospital.name} at {hospital.contact_phone}. "
+                f"Wishing you a smooth recovery. Goodbye!"
+            )
+            return {
+                "speaker": "AGENT",
+                "text": wrapup,
+                "turn_index": turn_count,
+                "stage": "CLOSING",
+                "checklist_step": 5,
+                "action": "AUTO_FINISH",
+                "intent": "call_conclusion",
+                "risk_level": "low",
+                "should_escalate": False
+            }
+
+        # 5. Extract questions from protocol
         questions = protocol.questions if protocol and protocol.questions else []
         clinical_questions = [
             q for q in sorted(questions, key=lambda q: q.sequence_order)
@@ -96,87 +130,62 @@ class VoiceIntakeAgent:
         if not clinical_questions:
             clinical_questions = sorted(questions, key=lambda q: q.sequence_order)
 
-        # Mapping for the 5-item UI checklist
-        checklist_map = {
-            "weight_gain_lbs": 1,
-            "shortness_of_breath": 1,
-            "peripheral_edema": 2,
-            "medication_adherence": 3,
-            "followup_appointment_scheduled": 4,
-            "pain_score": 1,
-            "calf_pain_dvt": 2,
-            "incision_erythema": 3,
-            "anticoagulant_adherence": 4,
-            "general_status": 1,
-            "fever_chills": 2,
-            "tachycardia_dyspnea": 3,
-            "antibiotic_adherence": 4
+        # Determine current active step (1 to 5)
+        # Turn 0 was greeting. Turns 1..5 map sequentially to questions, or adapt based on content
+        step_idx = min(5, max(1, turn_count))
+        target_q_text = clinical_questions[min(step_idx - 1, len(clinical_questions) - 1)].question_text if clinical_questions else "How is your recovery progressing?"
+
+        checklist_step_labels = {
+            1: "Daily Weight & Shortness of Breath",
+            2: "Swelling in Extremities",
+            3: "Medication Adherence",
+            4: "Follow-Up Clinic Appointment",
+            5: "Open Questions & Conclude"
         }
 
-        # q_idx corresponds to turn_count - 1
-        q_idx = turn_count - 1
-        if 0 <= q_idx < len(clinical_questions):
-            target_q = clinical_questions[q_idx]
-            q_text = target_q.question_text.replace("{hospital_name}", hospital.name)
+        # 6. Build Context for Groq LLM
+        patient_context = {
+            "name": f"{patient.first_name} {patient.last_name}",
+            "patient_id": patient.id,
+            "mrn": patient.mrn,
+            "condition": (protocol.target_condition if hasattr(protocol, "target_condition") else getattr(protocol, "condition", "Recovery")) if protocol else "Recovery",
+            "hospital_name": hospital.name,
+            "contact_phone": hospital.contact_phone,
+            "attempt_number": 1
+        }
 
-            # Contextual empathetic transition
-            prefix = ""
-            if any(w in speech_lower for w in ["better", "good", "yes", "okay", "fine", "steady", "taking meds", "no problems"]):
-                prefix = "That is encouraging to hear. "
-            elif any(w in speech_lower for w in ["not good", "hurts", "pain", "swollen", "fever", "stopped"]):
-                prefix = "I'm sorry to hear that you are having discomfort. We will note that carefully. "
+        protocol_context = {
+            "checklist_step": step_idx,
+            "current_step": checklist_step_labels.get(step_idx, "Daily Weight & Shortness of Breath"),
+            "active_question": target_q_text
+        }
 
-            reply = f"{prefix}{q_text}"
-            chk_step = checklist_map.get(target_q.expected_observation_key, min(4, q_idx + 1))
-            return {
-                "speaker": "AGENT",
-                "text": reply,
-                "turn_index": turn_count,
-                "stage": target_q.category.upper(),
-                "checklist_step": chk_step,
-                "action": "CONTINUE",
-                "expected_key": target_q.expected_observation_key,
-                "intent": "protocol_inquiry"
-            }
-        elif q_idx == len(clinical_questions):
-            # Ask if patient has any questions of their own
-            return {
-                "speaker": "AGENT",
-                "text": "Thank you for answering those check-in questions. Do you have any questions or concerns about your medications, recovery, or discharge instructions?",
-                "turn_index": turn_count,
-                "stage": "OPEN_QUESTIONS",
-                "checklist_step": 4,
-                "action": "CONTINUE",
-                "intent": "open_inquiry"
-            }
-        else:
-            # If patient says no / nothing else, conclude call and auto-evaluate
-            if any(w in speech_lower for w in ["no", "none", "nothing", "that's all", "thats all", "all set", "bye", "goodbye"]):
-                wrapup = (
-                    f"Thank you so much for your time today, {patient.first_name}. "
-                    f"I have recorded all your recovery answers in your medical chart. "
-                    f"If you ever need assistance, please call {hospital.name} at {hospital.contact_phone}. "
-                    f"Concluding check-in encounter and finalizing clinical documentation..."
-                )
-                return {
-                    "speaker": "AGENT",
-                    "text": wrapup,
-                    "turn_index": turn_count,
-                    "stage": "CLOSING",
-                    "checklist_step": 5,
-                    "action": "AUTO_FINISH",
-                    "intent": "call_conclusion"
-                }
-            else:
-                # Dynamic response to patient question, keeping conversation open
-                return {
-                    "speaker": "AGENT",
-                    "text": f"I have documented: '{latest_patient_speech.strip()}'. Our clinical care team will make a note of this. Do you have any other questions, or are you all set?",
-                    "turn_index": turn_count,
-                    "stage": "OPEN_QUESTIONS",
-                    "checklist_step": 5,
-                    "action": "CONTINUE",
-                    "intent": "open_inquiry"
-                }
+        # 7. Generate context-aware response via Groq LLM
+        llm_output: ChatbotOutput = groq_service.generate_chat_response(
+            patient_message=latest_patient_speech,
+            conversation_history=dialogue_history,
+            patient_context=patient_context,
+            protocol_context=protocol_context,
+            deterministic_safety=det_safety
+        )
+
+        # 8. Assemble structured result
+        action = "ESCALATE_NOW" if (llm_output.should_escalate or det_safety["should_escalate"]) else "CONTINUE"
+        chk_step = llm_output.checklist_step or step_idx
+
+        return {
+            "speaker": "AGENT",
+            "text": llm_output.response,
+            "turn_index": turn_count,
+            "stage": llm_output.protocol_step.upper(),
+            "checklist_step": chk_step,
+            "action": action,
+            "intent": llm_output.intent,
+            "risk_level": llm_output.risk_level,
+            "next_protocol_step": llm_output.next_protocol_step,
+            "needs_followup": llm_output.needs_followup,
+            "should_escalate": (llm_output.should_escalate or det_safety["should_escalate"])
+        }
 
 voice_intake_agent = VoiceIntakeAgent()
+

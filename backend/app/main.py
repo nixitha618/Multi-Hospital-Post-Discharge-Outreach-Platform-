@@ -19,6 +19,7 @@ from backend.app.api.ehr import router as ehr_router
 from backend.app.api.audit import router as audit_router
 from backend.app.api.health import router as health_router
 from backend.app.api.analytics import router as analytics_router
+from backend.app.api.chat import router as chat_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,6 +59,7 @@ app.include_router(ehr_router, prefix="/api")
 app.include_router(audit_router, prefix="/api")
 app.include_router(health_router, prefix="/api")
 app.include_router(analytics_router, prefix="/api")
+app.include_router(chat_router)
 
 import os
 from fastapi.staticfiles import StaticFiles

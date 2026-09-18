@@ -1204,6 +1204,7 @@ async function openCallModal(taskId) {
   if (input) {
     input.value = '';
     input.disabled = false;
+    setTimeout(() => input.focus(), 150);
   }
   const btnSend = document.getElementById('btnSendSpeech');
   if (btnSend) btnSend.disabled = false;
@@ -1285,6 +1286,30 @@ function closeCallModal() {
   }
 }
 
+function showTypingIndicator() {
+  const thread = document.getElementById('callDialogueThread');
+  if (!thread) return;
+  removeTypingIndicator();
+  const ind = document.createElement('div');
+  ind.id = 'callTypingIndicator';
+  ind.className = 'bubble bubble-agent';
+  ind.style.display = 'inline-flex';
+  ind.style.alignItems = 'center';
+  ind.style.gap = '6px';
+  ind.style.opacity = '0.85';
+  ind.innerHTML = `
+    <div class="bubble-sender" style="margin-bottom: 2px;">AEGIS CLINICAL AGENT</div>
+    <span style="font-size: 11px; font-style: italic; color: #94a3b8;">Processing clinical response...</span>
+  `;
+  thread.appendChild(ind);
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function removeTypingIndicator() {
+  const ind = document.getElementById('callTypingIndicator');
+  if (ind) ind.remove();
+}
+
 async function handleSendSpeech() {
   const input = document.getElementById('callSpeechInput');
   if (!input || !activeCallId) return;
@@ -1293,9 +1318,12 @@ async function handleSendSpeech() {
 
   input.value = '';
   appendDialogueBubble('PATIENT', speech);
+  showTypingIndicator();
 
   try {
     const res = await api.sendCallTurn(activeCallId, speech);
+    removeTypingIndicator();
+
     if (res.agent_turn) {
       appendDialogueBubble('AGENT', res.agent_turn.text);
       if (res.agent_turn.checklist_step !== undefined) {
@@ -1316,7 +1344,9 @@ async function handleSendSpeech() {
       }, 2000);
     }
   } catch (err) {
+    removeTypingIndicator();
     console.error(err);
+    showToast("Error processing dialogue turn: " + err.message, "danger");
   }
 }
 
@@ -1434,12 +1464,19 @@ async function handleEndCallTriage() {
         <div style="margin-bottom: 8px;">
           EHR Sync: <strong style="color: var(--success);">${res.ehr_sync_status}</strong>
         </div>
+        ${res.dialogue_evaluation ? `
+          <div style="margin-bottom: 8px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 6px; padding: 6px 10px; font-size: 10px;">
+            <div style="font-weight: 700; color: #818cf8; margin-bottom: 2px;">AI DIALOGUE AUDIT:</div>
+            <div>Protocol Compliance: <strong>${Math.round((res.dialogue_evaluation.protocol_compliance_score || 1) * 100)}%</strong> • Relevance: <strong>${Math.round((res.dialogue_evaluation.relevance_score || 1) * 100)}%</strong> • Comprehension: <strong>${Math.round((res.dialogue_evaluation.comprehension_score || 1) * 100)}%</strong></div>
+            <div style="color: #cbd5e1; margin-top: 2px;">${res.dialogue_evaluation.overall_clinical_summary || ''}</div>
+          </div>
+        ` : ''}
         <pre style="background: #000; padding: 8px; border-radius: 4px; font-family: 'JetBrains Mono'; font-size: 10px; white-space: pre-wrap; max-height: 180px; overflow-y: auto;">${res.documentation_summary}</pre>
       `;
     }
     setTimeout(() => {
       closeCallModal();
-    }, 3500);
+    }, 4500);
   } catch (err) {
     showToast("Error ending call: " + err.message, 'danger');
   }
