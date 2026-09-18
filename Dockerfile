@@ -1,4 +1,4 @@
-﻿# Multi-Hospital Post-Discharge Outreach Platform Dockerfile
+# Multi-Hospital Post-Discharge Outreach Platform Dockerfile
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -23,4 +23,4 @@ COPY backend/ ./backend/
 EXPOSE 8000
 
 # Run uvicorn server
-CMD [ sh, -c, uvicorn backend.app.main:app --host 0.0.0.0 --port ]
+CMD uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}
