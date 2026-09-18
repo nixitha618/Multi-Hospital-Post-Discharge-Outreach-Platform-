@@ -1,0 +1,16 @@
+﻿__pycache__/
+*.py[cod]
+*.class
+.pytest_cache/
+.coverage
+htmlcov/
+.git/
+.gitignore
+.env
+.env.*
+venv/
+env/
+.venv/
+outreach_platform.db
+outreach_platform.db-shm
+outreach_platform.db-wal
